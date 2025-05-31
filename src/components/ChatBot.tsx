@@ -1,11 +1,10 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Send, Mic, MicOff } from 'lucide-react';
+import { Send } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
@@ -15,8 +14,6 @@ interface Message {
   text: string;
   isBot: boolean;
   timestamp: Date;
-  messageType?: 'text' | 'audio';
-  audioUrl?: string;
 }
 
 const ChatBot: React.FC = () => {
@@ -25,8 +22,6 @@ const ChatBot: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
-  const [isRecording, setIsRecording] = useState(false);
-  const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
 
   const healthResponses = [
@@ -76,9 +71,7 @@ const ChatBot: React.FC = () => {
           id: msg.id,
           text: msg.message,
           isBot: msg.is_bot,
-          timestamp: new Date(msg.created_at),
-          messageType: msg.message_type as 'text' | 'audio',
-          audioUrl: msg.audio_url || undefined
+          timestamp: new Date(msg.created_at)
         }));
         setMessages(loadedMessages);
       } else {
@@ -112,8 +105,7 @@ const ChatBot: React.FC = () => {
           user_id: user.id,
           message: message.text,
           is_bot: message.isBot,
-          message_type: message.messageType || 'text',
-          audio_url: message.audioUrl
+          message_type: 'text'
         });
 
       if (error) throw error;
@@ -134,8 +126,7 @@ const ChatBot: React.FC = () => {
       id: Date.now().toString(),
       text: input,
       isBot: false,
-      timestamp: new Date(),
-      messageType: 'text'
+      timestamp: new Date()
     };
 
     setMessages(prev => [...prev, userMessage]);
@@ -153,8 +144,7 @@ const ChatBot: React.FC = () => {
         id: (Date.now() + 1).toString(),
         text: healthResponses[Math.floor(Math.random() * healthResponses.length)],
         isBot: true,
-        timestamp: new Date(),
-        messageType: 'text'
+        timestamp: new Date()
       };
       setMessages(prev => [...prev, botResponse]);
       setIsTyping(false);
@@ -164,80 +154,6 @@ const ChatBot: React.FC = () => {
         await saveMessageToDatabase(botResponse);
       }
     }, 1500);
-  };
-
-  const startRecording = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const recorder = new MediaRecorder(stream);
-      const audioChunks: Blob[] = [];
-
-      recorder.ondataavailable = (event) => {
-        audioChunks.push(event.data);
-      };
-
-      recorder.onstop = async () => {
-        const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
-        const audioUrl = URL.createObjectURL(audioBlob);
-        
-        // Create a message with audio
-        const audioMessage: Message = {
-          id: Date.now().toString(),
-          text: 'Voice message',
-          isBot: false,
-          timestamp: new Date(),
-          messageType: 'audio',
-          audioUrl: audioUrl
-        };
-
-        setMessages(prev => [...prev, audioMessage]);
-
-        // Save audio message to database
-        if (user) {
-          await saveMessageToDatabase(audioMessage);
-        }
-
-        // Simulate bot response to audio
-        setIsTyping(true);
-        setTimeout(async () => {
-          const botResponse: Message = {
-            id: (Date.now() + 1).toString(),
-            text: "I received your voice message. " + healthResponses[Math.floor(Math.random() * healthResponses.length)],
-            isBot: true,
-            timestamp: new Date(),
-            messageType: 'text'
-          };
-          setMessages(prev => [...prev, botResponse]);
-          setIsTyping(false);
-
-          if (user) {
-            await saveMessageToDatabase(botResponse);
-          }
-        }, 2000);
-
-        // Clean up
-        stream.getTracks().forEach(track => track.stop());
-      };
-
-      setMediaRecorder(recorder);
-      recorder.start();
-      setIsRecording(true);
-    } catch (error) {
-      console.error('Error accessing microphone:', error);
-      toast({
-        title: "Error",
-        description: "Failed to access microphone",
-        variant: "destructive"
-      });
-    }
-  };
-
-  const stopRecording = () => {
-    if (mediaRecorder && mediaRecorder.state === 'recording') {
-      mediaRecorder.stop();
-      setIsRecording(false);
-      setMediaRecorder(null);
-    }
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -276,17 +192,7 @@ const ChatBot: React.FC = () => {
                       : 'bg-blue-600 text-white'
                   }`}
                 >
-                  {message.messageType === 'audio' && message.audioUrl ? (
-                    <div className="space-y-2">
-                      <p className="text-sm">🎤 Voice message</p>
-                      <audio controls className="w-full">
-                        <source src={message.audioUrl} type="audio/wav" />
-                        Your browser does not support audio playback.
-                      </audio>
-                    </div>
-                  ) : (
-                    <p className="text-sm">{message.text}</p>
-                  )}
+                  <p className="text-sm">{message.text}</p>
                   <p className="text-xs opacity-70 mt-1">
                     {message.timestamp.toLocaleTimeString()}
                   </p>
@@ -314,16 +220,8 @@ const ChatBot: React.FC = () => {
               onKeyPress={handleKeyPress}
               placeholder="Ask me about your health concerns..."
               className="flex-1"
-              disabled={isRecording}
             />
-            <Button
-              onClick={isRecording ? stopRecording : startRecording}
-              variant={isRecording ? "destructive" : "outline"}
-              size="icon"
-            >
-              {isRecording ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
-            </Button>
-            <Button onClick={handleSend} disabled={!input.trim() || isTyping || isRecording}>
+            <Button onClick={handleSend} disabled={!input.trim() || isTyping}>
               <Send className="h-4 w-4" />
             </Button>
           </div>
