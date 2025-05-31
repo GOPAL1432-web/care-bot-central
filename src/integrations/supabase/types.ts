@@ -42,6 +42,36 @@ export type Database = {
         }
         Relationships: []
       }
+      chat_conversations: {
+        Row: {
+          audio_url: string | null
+          created_at: string
+          id: string
+          is_bot: boolean
+          message: string
+          message_type: string | null
+          user_id: string
+        }
+        Insert: {
+          audio_url?: string | null
+          created_at?: string
+          id?: string
+          is_bot?: boolean
+          message: string
+          message_type?: string | null
+          user_id: string
+        }
+        Update: {
+          audio_url?: string | null
+          created_at?: string
+          id?: string
+          is_bot?: boolean
+          message?: string
+          message_type?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       doctors: {
         Row: {
           consultation_fee: number | null

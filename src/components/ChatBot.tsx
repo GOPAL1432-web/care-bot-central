@@ -5,26 +5,28 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Send } from 'lucide-react';
+import { Send, Mic, MicOff } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
+import { useToast } from '@/hooks/use-toast';
 
 interface Message {
   id: string;
   text: string;
   isBot: boolean;
   timestamp: Date;
+  messageType?: 'text' | 'audio';
+  audioUrl?: string;
 }
 
 const ChatBot: React.FC = () => {
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: '1',
-      text: 'Hello! I\'m your AI healthcare assistant. How can I help you today?',
-      isBot: true,
-      timestamp: new Date()
-    }
-  ]);
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
 
   const healthResponses = [
@@ -36,11 +38,94 @@ const ChatBot: React.FC = () => {
     "Your health is important. While I can offer general guidance, professional medical advice is always recommended.",
   ];
 
+  // Load chat history when component mounts
+  useEffect(() => {
+    if (user) {
+      loadChatHistory();
+    } else {
+      // Set initial bot message for non-authenticated users
+      setMessages([{
+        id: '1',
+        text: 'Hello! I\'m your AI healthcare assistant. How can I help you today?',
+        isBot: true,
+        timestamp: new Date()
+      }]);
+    }
+  }, [user]);
+
   useEffect(() => {
     if (scrollAreaRef.current) {
       scrollAreaRef.current.scrollTop = scrollAreaRef.current.scrollHeight;
     }
   }, [messages]);
+
+  const loadChatHistory = async () => {
+    if (!user) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('chat_conversations')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: true });
+
+      if (error) throw error;
+
+      if (data && data.length > 0) {
+        const loadedMessages: Message[] = data.map(msg => ({
+          id: msg.id,
+          text: msg.message,
+          isBot: msg.is_bot,
+          timestamp: new Date(msg.created_at),
+          messageType: msg.message_type as 'text' | 'audio',
+          audioUrl: msg.audio_url || undefined
+        }));
+        setMessages(loadedMessages);
+      } else {
+        // If no chat history, add initial bot message
+        const initialMessage = {
+          id: '1',
+          text: 'Hello! I\'m your AI healthcare assistant. How can I help you today?',
+          isBot: true,
+          timestamp: new Date()
+        };
+        setMessages([initialMessage]);
+        await saveMessageToDatabase(initialMessage);
+      }
+    } catch (error) {
+      console.error('Error loading chat history:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load chat history",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const saveMessageToDatabase = async (message: Message) => {
+    if (!user) return;
+
+    try {
+      const { error } = await supabase
+        .from('chat_conversations')
+        .insert({
+          user_id: user.id,
+          message: message.text,
+          is_bot: message.isBot,
+          message_type: message.messageType || 'text',
+          audio_url: message.audioUrl
+        });
+
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error saving message:', error);
+      toast({
+        title: "Error",
+        description: "Failed to save message",
+        variant: "destructive"
+      });
+    }
+  };
 
   const handleSend = async () => {
     if (!input.trim()) return;
@@ -49,24 +134,110 @@ const ChatBot: React.FC = () => {
       id: Date.now().toString(),
       text: input,
       isBot: false,
-      timestamp: new Date()
+      timestamp: new Date(),
+      messageType: 'text'
     };
 
     setMessages(prev => [...prev, userMessage]);
     setInput('');
     setIsTyping(true);
 
+    // Save user message to database
+    if (user) {
+      await saveMessageToDatabase(userMessage);
+    }
+
     // Simulate AI response
-    setTimeout(() => {
+    setTimeout(async () => {
       const botResponse: Message = {
         id: (Date.now() + 1).toString(),
         text: healthResponses[Math.floor(Math.random() * healthResponses.length)],
         isBot: true,
-        timestamp: new Date()
+        timestamp: new Date(),
+        messageType: 'text'
       };
       setMessages(prev => [...prev, botResponse]);
       setIsTyping(false);
+
+      // Save bot response to database
+      if (user) {
+        await saveMessageToDatabase(botResponse);
+      }
     }, 1500);
+  };
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      const audioChunks: Blob[] = [];
+
+      recorder.ondataavailable = (event) => {
+        audioChunks.push(event.data);
+      };
+
+      recorder.onstop = async () => {
+        const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+        const audioUrl = URL.createObjectURL(audioBlob);
+        
+        // Create a message with audio
+        const audioMessage: Message = {
+          id: Date.now().toString(),
+          text: 'Voice message',
+          isBot: false,
+          timestamp: new Date(),
+          messageType: 'audio',
+          audioUrl: audioUrl
+        };
+
+        setMessages(prev => [...prev, audioMessage]);
+
+        // Save audio message to database
+        if (user) {
+          await saveMessageToDatabase(audioMessage);
+        }
+
+        // Simulate bot response to audio
+        setIsTyping(true);
+        setTimeout(async () => {
+          const botResponse: Message = {
+            id: (Date.now() + 1).toString(),
+            text: "I received your voice message. " + healthResponses[Math.floor(Math.random() * healthResponses.length)],
+            isBot: true,
+            timestamp: new Date(),
+            messageType: 'text'
+          };
+          setMessages(prev => [...prev, botResponse]);
+          setIsTyping(false);
+
+          if (user) {
+            await saveMessageToDatabase(botResponse);
+          }
+        }, 2000);
+
+        // Clean up
+        stream.getTracks().forEach(track => track.stop());
+      };
+
+      setMediaRecorder(recorder);
+      recorder.start();
+      setIsRecording(true);
+    } catch (error) {
+      console.error('Error accessing microphone:', error);
+      toast({
+        title: "Error",
+        description: "Failed to access microphone",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorder && mediaRecorder.state === 'recording') {
+      mediaRecorder.stop();
+      setIsRecording(false);
+      setMediaRecorder(null);
+    }
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -83,6 +254,11 @@ const ChatBot: React.FC = () => {
             <AvatarFallback className="text-white">AI</AvatarFallback>
           </Avatar>
           <span>Healthcare AI Assistant</span>
+          {!user && (
+            <span className="text-sm text-orange-600 font-normal">
+              (Login to save chat history)
+            </span>
+          )}
         </CardTitle>
       </CardHeader>
       <CardContent className="flex-1 flex flex-col p-0">
@@ -100,7 +276,17 @@ const ChatBot: React.FC = () => {
                       : 'bg-blue-600 text-white'
                   }`}
                 >
-                  <p className="text-sm">{message.text}</p>
+                  {message.messageType === 'audio' && message.audioUrl ? (
+                    <div className="space-y-2">
+                      <p className="text-sm">🎤 Voice message</p>
+                      <audio controls className="w-full">
+                        <source src={message.audioUrl} type="audio/wav" />
+                        Your browser does not support audio playback.
+                      </audio>
+                    </div>
+                  ) : (
+                    <p className="text-sm">{message.text}</p>
+                  )}
                   <p className="text-xs opacity-70 mt-1">
                     {message.timestamp.toLocaleTimeString()}
                   </p>
@@ -128,8 +314,16 @@ const ChatBot: React.FC = () => {
               onKeyPress={handleKeyPress}
               placeholder="Ask me about your health concerns..."
               className="flex-1"
+              disabled={isRecording}
             />
-            <Button onClick={handleSend} disabled={!input.trim() || isTyping}>
+            <Button
+              onClick={isRecording ? stopRecording : startRecording}
+              variant={isRecording ? "destructive" : "outline"}
+              size="icon"
+            >
+              {isRecording ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+            </Button>
+            <Button onClick={handleSend} disabled={!input.trim() || isTyping || isRecording}>
               <Send className="h-4 w-4" />
             </Button>
           </div>
