@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -6,7 +7,6 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Send } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 
 interface Message {
@@ -17,11 +17,11 @@ interface Message {
 }
 
 const ChatBot: React.FC = () => {
-  const { user } = useAuth();
   const { toast } = useToast();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [user, setUser] = useState<any>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
 
   const healthResponses = [
@@ -32,6 +32,21 @@ const ChatBot: React.FC = () => {
     "I can provide general health information, but for specific medical concerns, please see a doctor or healthcare professional.",
     "Your health is important. While I can offer general guidance, professional medical advice is always recommended.",
   ];
+
+  // Check for authenticated user
+  useEffect(() => {
+    const getUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      setUser(user);
+    };
+    getUser();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      setUser(session?.user || null);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
 
   // Load chat history when component mounts
   useEffect(() => {

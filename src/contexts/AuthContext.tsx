@@ -1,7 +1,9 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import type { User } from '@supabase/supabase-js';
 
-interface User {
+interface AuthUser {
   id: string;
   name: string;
   email: string;
@@ -10,7 +12,7 @@ interface User {
 }
 
 interface AuthContextType {
-  user: User | null;
+  user: AuthUser | null;
   login: (email: string, password: string) => Promise<boolean>;
   signup: (name: string, email: string, password: string) => Promise<boolean>;
   logout: () => void;
@@ -29,69 +31,117 @@ export const useAuth = () => {
 };
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
 
   useEffect(() => {
-    // Check for saved user data in localStorage
-    const savedUser = localStorage.getItem('user');
-    if (savedUser) {
-      setUser(JSON.parse(savedUser));
-    }
+    // Get initial session
+    const getSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        setUser(mapSupabaseUserToAuthUser(session.user));
+      }
+    };
+    getSession();
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (session?.user) {
+        setUser(mapSupabaseUserToAuthUser(session.user));
+      } else {
+        setUser(null);
+      }
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
+  const mapSupabaseUserToAuthUser = (supabaseUser: User): AuthUser => {
+    return {
+      id: supabaseUser.id,
+      name: supabaseUser.user_metadata?.name || supabaseUser.email?.split('@')[0] || 'User',
+      email: supabaseUser.email || '',
+      role: supabaseUser.email === 'admin@demo.com' ? 'admin' : 'user',
+      profileImage: supabaseUser.user_metadata?.avatar_url
+    };
+  };
+
   const login = async (email: string, password: string): Promise<boolean> => {
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    // Demo users
-    const demoUsers = [
-      { id: '1', name: 'John Doe', email: 'user@demo.com', password: 'password', role: 'user' as const },
-      { id: '2', name: 'Admin User', email: 'admin@demo.com', password: 'admin123', role: 'admin' as const }
-    ];
-    
-    const foundUser = demoUsers.find(u => u.email === email && u.password === password);
-    if (foundUser) {
-      const userWithoutPassword = { ...foundUser };
-      delete (userWithoutPassword as any).password;
-      setUser(userWithoutPassword);
-      localStorage.setItem('user', JSON.stringify(userWithoutPassword));
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password
+      });
+      
+      if (error) {
+        console.error('Login error:', error.message);
+        return false;
+      }
       return true;
+    } catch (error) {
+      console.error('Login error:', error);
+      return false;
     }
-    return false;
   };
 
   const signup = async (name: string, email: string, password: string): Promise<boolean> => {
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    const newUser = {
-      id: Date.now().toString(),
-      name,
-      email,
-      role: 'user' as const
-    };
-    
-    setUser(newUser);
-    localStorage.setItem('user', JSON.stringify(newUser));
-    return true;
+    try {
+      const { error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            name: name
+          }
+        }
+      });
+      
+      if (error) {
+        console.error('Signup error:', error.message);
+        return false;
+      }
+      return true;
+    } catch (error) {
+      console.error('Signup error:', error);
+      return false;
+    }
   };
 
-  const logout = () => {
-    setUser(null);
-    localStorage.removeItem('user');
+  const logout = async () => {
+    try {
+      await supabase.auth.signOut();
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
   };
 
   const resetPassword = async (email: string): Promise<boolean> => {
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    return true;
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email);
+      if (error) {
+        console.error('Reset password error:', error.message);
+        return false;
+      }
+      return true;
+    } catch (error) {
+      console.error('Reset password error:', error);
+      return false;
+    }
   };
 
-  const updateProfile = (name: string, profileImage?: string) => {
-    if (user) {
-      const updatedUser = { ...user, name, ...(profileImage && { profileImage }) };
-      setUser(updatedUser);
-      localStorage.setItem('user', JSON.stringify(updatedUser));
+  const updateProfile = async (name: string, profileImage?: string) => {
+    try {
+      const { error } = await supabase.auth.updateUser({
+        data: {
+          name: name,
+          ...(profileImage && { avatar_url: profileImage })
+        }
+      });
+      
+      if (error) {
+        console.error('Update profile error:', error.message);
+      }
+    } catch (error) {
+      console.error('Update profile error:', error);
     }
   };
 
