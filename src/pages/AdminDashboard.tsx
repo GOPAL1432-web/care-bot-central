@@ -4,10 +4,11 @@ import { useAuth } from '../contexts/AuthContext';
 import Header from '../components/Header';
 import ProfileModal from '../components/ProfileModal';
 import HealthManagement from '../components/admin/HealthManagement';
+import HealthInformation from '../components/admin/HealthInformation';
 import DoctorManagement from '../components/admin/DoctorManagement';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Users, Heart, Activity, UserCheck } from 'lucide-react';
+import { Users, Heart, Activity, UserCheck, Info } from 'lucide-react';
 
 const AdminDashboard: React.FC = () => {
   const { user } = useAuth();
@@ -75,13 +76,18 @@ const AdminDashboard: React.FC = () => {
         </div>
 
         {/* Management Tabs */}
-        <Tabs defaultValue="health" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="health">Health Management</TabsTrigger>
+        <Tabs defaultValue="health-info" className="space-y-6">
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="health-info">Health Information</TabsTrigger>
+            <TabsTrigger value="health-tips">Health Tips</TabsTrigger>
             <TabsTrigger value="doctors">Doctor Management</TabsTrigger>
           </TabsList>
           
-          <TabsContent value="health">
+          <TabsContent value="health-info">
+            <HealthInformation />
+          </TabsContent>
+          
+          <TabsContent value="health-tips">
             <HealthManagement />
           </TabsContent>
           

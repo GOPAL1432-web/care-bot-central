@@ -16,22 +16,22 @@ interface Message {
   timestamp: Date;
 }
 
+interface HealthInfo {
+  id: string;
+  title: string;
+  description: string;
+  category: string;
+  tags: string;
+}
+
 const ChatBot: React.FC = () => {
   const { toast } = useToast();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [user, setUser] = useState<any>(null);
+  const [healthInformation, setHealthInformation] = useState<HealthInfo[]>([]);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
-
-  const healthResponses = [
-    "I understand your concern. It's always best to consult with a healthcare professional for personalized advice.",
-    "Based on general medical knowledge, here are some suggestions. However, please consult your doctor for proper diagnosis.",
-    "Health symptoms can vary greatly between individuals. I recommend speaking with a medical professional.",
-    "That's a great question about health. For accurate medical advice, please consult with your healthcare provider.",
-    "I can provide general health information, but for specific medical concerns, please see a doctor or healthcare professional.",
-    "Your health is important. While I can offer general guidance, professional medical advice is always recommended.",
-  ];
 
   // Check for authenticated user
   useEffect(() => {
@@ -46,6 +46,11 @@ const ChatBot: React.FC = () => {
     });
 
     return () => subscription.unsubscribe();
+  }, []);
+
+  // Load health information for AI responses
+  useEffect(() => {
+    loadHealthInformation();
   }, []);
 
   // Load chat history when component mounts
@@ -68,6 +73,19 @@ const ChatBot: React.FC = () => {
       scrollAreaRef.current.scrollTop = scrollAreaRef.current.scrollHeight;
     }
   }, [messages]);
+
+  const loadHealthInformation = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('health_information')
+        .select('*');
+
+      if (error) throw error;
+      setHealthInformation(data || []);
+    } catch (error) {
+      console.error('Error loading health information:', error);
+    }
+  };
 
   const loadChatHistory = async () => {
     if (!user) return;
@@ -134,6 +152,47 @@ const ChatBot: React.FC = () => {
     }
   };
 
+  const generateHealthResponse = (userInput: string): string => {
+    const input = userInput.toLowerCase();
+    
+    // Find relevant health information based on user input
+    const relevantInfo = healthInformation.find(info => {
+      const searchTerms = [
+        info.title.toLowerCase(),
+        info.category.toLowerCase(),
+        ...info.tags.toLowerCase().split(',').map(tag => tag.trim())
+      ];
+      
+      return searchTerms.some(term => 
+        input.includes(term) || term.includes(input.split(' ')[0])
+      );
+    });
+
+    if (relevantInfo) {
+      return `Based on our health information database: ${relevantInfo.description}\n\nCategory: ${relevantInfo.category}\n\nPlease remember that this is general health information. For personalized medical advice, always consult with a healthcare professional.`;
+    }
+
+    // Fallback responses for common health topics
+    if (input.includes('exercise') || input.includes('workout') || input.includes('fitness')) {
+      return "Regular exercise is crucial for maintaining good health. It can improve cardiovascular health, strengthen muscles and bones, boost mental health, and help maintain a healthy weight. Aim for at least 150 minutes of moderate-intensity exercise per week. However, please consult with a healthcare provider before starting any new exercise program.";
+    }
+
+    if (input.includes('diet') || input.includes('nutrition') || input.includes('food')) {
+      return "A balanced diet is essential for good health. Focus on eating a variety of fruits, vegetables, whole grains, lean proteins, and healthy fats. Stay hydrated by drinking plenty of water. Limit processed foods, added sugars, and excessive sodium. For personalized nutrition advice, consider consulting with a registered dietitian.";
+    }
+
+    if (input.includes('sleep') || input.includes('tired') || input.includes('insomnia')) {
+      return "Good sleep is vital for physical and mental health. Adults should aim for 7-9 hours of quality sleep per night. Establish a regular sleep schedule, create a comfortable sleep environment, and avoid screens before bedtime. If you're experiencing persistent sleep problems, consult with a healthcare provider.";
+    }
+
+    if (input.includes('stress') || input.includes('anxiety') || input.includes('mental health')) {
+      return "Managing stress and maintaining mental health is crucial for overall well-being. Try relaxation techniques like deep breathing, meditation, or yoga. Regular exercise, adequate sleep, and social connections can also help. If you're experiencing persistent mental health concerns, please reach out to a mental health professional.";
+    }
+
+    // Default response
+    return "I understand your health concern. Based on general medical knowledge, it's always best to maintain a healthy lifestyle with regular exercise, balanced nutrition, adequate sleep, and stress management. However, for specific medical advice or concerns, please consult with a qualified healthcare professional who can provide personalized guidance based on your individual health needs.";
+  };
+
   const handleSend = async () => {
     if (!input.trim()) return;
 
@@ -153,11 +212,11 @@ const ChatBot: React.FC = () => {
       await saveMessageToDatabase(userMessage);
     }
 
-    // Simulate AI response
+    // Generate AI response based on health information
     setTimeout(async () => {
       const botResponse: Message = {
         id: (Date.now() + 1).toString(),
-        text: healthResponses[Math.floor(Math.random() * healthResponses.length)],
+        text: generateHealthResponse(userMessage.text),
         isBot: true,
         timestamp: new Date()
       };
@@ -207,7 +266,7 @@ const ChatBot: React.FC = () => {
                       : 'bg-blue-600 text-white'
                   }`}
                 >
-                  <p className="text-sm">{message.text}</p>
+                  <p className="text-sm whitespace-pre-wrap">{message.text}</p>
                   <p className="text-xs opacity-70 mt-1">
                     {message.timestamp.toLocaleTimeString()}
                   </p>

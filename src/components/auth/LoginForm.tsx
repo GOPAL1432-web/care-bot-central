@@ -42,6 +42,18 @@ const LoginForm: React.FC<LoginFormProps> = ({ onSwitchToSignup, onForgotPasswor
     }
   };
 
+  // Pre-fill admin credentials
+  const fillAdminCredentials = () => {
+    setEmail('admin@demo.com');
+    setPassword('admin123');
+  };
+
+  // Pre-fill user credentials
+  const fillUserCredentials = () => {
+    setEmail('user@demo.com');
+    setPassword('password');
+  };
+
   return (
     <Card className="w-full max-w-md mx-auto">
       <CardHeader className="space-y-1">
@@ -60,7 +72,27 @@ const LoginForm: React.FC<LoginFormProps> = ({ onSwitchToSignup, onForgotPasswor
           
           <Alert>
             <AlertDescription>
-              Demo accounts: user@demo.com / password or admin@demo.com / admin123
+              <div className="space-y-2">
+                <p className="font-medium">Demo accounts:</p>
+                <div className="flex gap-2">
+                  <Button 
+                    type="button" 
+                    variant="outline" 
+                    size="sm"
+                    onClick={fillUserCredentials}
+                  >
+                    Fill User Account
+                  </Button>
+                  <Button 
+                    type="button" 
+                    variant="outline" 
+                    size="sm"
+                    onClick={fillAdminCredentials}
+                  >
+                    Fill Admin Account
+                  </Button>
+                </div>
+              </div>
             </AlertDescription>
           </Alert>
 

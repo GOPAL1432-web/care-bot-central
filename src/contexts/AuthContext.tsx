@@ -30,6 +30,13 @@ export const useAuth = () => {
   return context;
 };
 
+// Admin users - you can add more emails here
+const ADMIN_EMAILS = [
+  'admin@demo.com',
+  'admin@healthcare.com',
+  'administrator@health.com'
+];
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<AuthUser | null>(null);
 
@@ -56,11 +63,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const mapSupabaseUserToAuthUser = (supabaseUser: User): AuthUser => {
+    const isAdmin = ADMIN_EMAILS.includes(supabaseUser.email || '');
+    
     return {
       id: supabaseUser.id,
       name: supabaseUser.user_metadata?.name || supabaseUser.email?.split('@')[0] || 'User',
       email: supabaseUser.email || '',
-      role: supabaseUser.email === 'admin@demo.com' ? 'admin' : 'user',
+      role: isAdmin ? 'admin' : 'user',
       profileImage: supabaseUser.user_metadata?.avatar_url
     };
   };
