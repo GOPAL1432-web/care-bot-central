@@ -44,17 +44,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Get initial session
     const getSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
+      console.log('Initial session:', session);
       if (session?.user) {
-        setUser(mapSupabaseUserToAuthUser(session.user));
+        const authUser = mapSupabaseUserToAuthUser(session.user);
+        console.log('Setting initial user:', authUser);
+        setUser(authUser);
       }
     };
     getSession();
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log('Auth state change:', event, session);
       if (session?.user) {
-        setUser(mapSupabaseUserToAuthUser(session.user));
+        const authUser = mapSupabaseUserToAuthUser(session.user);
+        console.log('Setting user from auth change:', authUser);
+        setUser(authUser);
       } else {
+        console.log('Clearing user');
         setUser(null);
       }
     });
@@ -64,6 +71,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const mapSupabaseUserToAuthUser = (supabaseUser: User): AuthUser => {
     const isAdmin = ADMIN_EMAILS.includes(supabaseUser.email || '');
+    console.log('Mapping user:', supabaseUser.email, 'isAdmin:', isAdmin);
     
     return {
       id: supabaseUser.id,
@@ -76,7 +84,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const login = async (email: string, password: string): Promise<boolean> => {
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      console.log('Attempting login with:', email);
+      const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password
       });
@@ -85,6 +94,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         console.error('Login error:', error.message);
         return false;
       }
+      
+      console.log('Login successful:', data);
       return true;
     } catch (error) {
       console.error('Login error:', error);

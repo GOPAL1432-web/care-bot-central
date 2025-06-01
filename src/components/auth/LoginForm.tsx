@@ -25,10 +25,12 @@ const LoginForm: React.FC<LoginFormProps> = ({ onSwitchToSignup, onForgotPasswor
     setIsLoading(true);
     setError('');
 
+    console.log('Form submitted with:', email, password);
+
     try {
       const success = await login(email, password);
       if (!success) {
-        setError('Invalid email or password');
+        setError('Invalid email or password. Please check your credentials and try again.');
       } else {
         toast({
           title: "Login successful",
@@ -36,7 +38,8 @@ const LoginForm: React.FC<LoginFormProps> = ({ onSwitchToSignup, onForgotPasswor
         });
       }
     } catch (err) {
-      setError('An error occurred during login');
+      console.error('Login form error:', err);
+      setError('An error occurred during login. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -44,14 +47,18 @@ const LoginForm: React.FC<LoginFormProps> = ({ onSwitchToSignup, onForgotPasswor
 
   // Pre-fill admin credentials
   const fillAdminCredentials = () => {
+    console.log('Filling admin credentials');
     setEmail('admin@demo.com');
     setPassword('admin123');
+    setError(''); // Clear any existing errors
   };
 
   // Pre-fill user credentials
   const fillUserCredentials = () => {
+    console.log('Filling user credentials');
     setEmail('user@demo.com');
     setPassword('password');
+    setError(''); // Clear any existing errors
   };
 
   return (
@@ -92,6 +99,9 @@ const LoginForm: React.FC<LoginFormProps> = ({ onSwitchToSignup, onForgotPasswor
                     Fill Admin Account
                   </Button>
                 </div>
+                <p className="text-xs text-gray-600">
+                  Admin: admin@demo.com / admin123
+                </p>
               </div>
             </AlertDescription>
           </Alert>
