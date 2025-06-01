@@ -76,7 +76,8 @@ const ChatBot: React.FC = () => {
 
   const loadHealthInformation = async () => {
     try {
-      const { data, error } = await supabase
+      // Use type assertion to bypass TypeScript issues until types are regenerated
+      const { data, error } = await (supabase as any)
         .from('health_information')
         .select('*');
 

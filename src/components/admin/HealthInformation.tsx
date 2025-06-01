@@ -38,7 +38,8 @@ const HealthInformation: React.FC = () => {
 
   const loadHealthInformation = async () => {
     try {
-      const { data, error } = await supabase
+      // Use type assertion to bypass TypeScript issues until types are regenerated
+      const { data, error } = await (supabase as any)
         .from('health_information')
         .select('*')
         .order('created_at', { ascending: false });
@@ -61,7 +62,7 @@ const HealthInformation: React.FC = () => {
     
     try {
       if (editingInfo) {
-        const { error } = await supabase
+        const { error } = await (supabase as any)
           .from('health_information')
           .update(formData)
           .eq('id', editingInfo.id);
@@ -73,7 +74,7 @@ const HealthInformation: React.FC = () => {
           description: "The health information has been updated successfully.",
         });
       } else {
-        const { error } = await supabase
+        const { error } = await (supabase as any)
           .from('health_information')
           .insert([formData]);
 
@@ -114,7 +115,7 @@ const HealthInformation: React.FC = () => {
 
   const handleDelete = async (id: string) => {
     try {
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from('health_information')
         .delete()
         .eq('id', id);
@@ -136,6 +137,12 @@ const HealthInformation: React.FC = () => {
     }
   };
 
+  const resetModal = () => {
+    setFormData({ title: '', description: '', category: '', tags: '' });
+    setEditingInfo(null);
+    setIsAddModalOpen(false);
+  };
+
   return (
     <Card>
       <CardHeader>
@@ -147,7 +154,10 @@ const HealthInformation: React.FC = () => {
               <CardDescription>Manage health tips and information for the AI chatbot</CardDescription>
             </div>
           </div>
-          <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
+          <Dialog open={isAddModalOpen} onOpenChange={(open) => {
+            if (!open) resetModal();
+            setIsAddModalOpen(open);
+          }}>
             <DialogTrigger asChild>
               <Button>
                 <Plus className="h-4 w-4 mr-2" />
@@ -203,7 +213,7 @@ const HealthInformation: React.FC = () => {
                   />
                 </div>
                 <div className="flex justify-end space-x-2">
-                  <Button type="button" variant="outline" onClick={() => setIsAddModalOpen(false)}>
+                  <Button type="button" variant="outline" onClick={resetModal}>
                     Cancel
                   </Button>
                   <Button type="submit" disabled={isLoading}>
