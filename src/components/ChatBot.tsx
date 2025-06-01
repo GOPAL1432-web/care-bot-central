@@ -1,13 +1,13 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Send } from 'lucide-react';
+import { Send, Mic, MicOff } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { VoiceRecorder, convertBlobToBase64 } from '@/utils/VoiceRecorder';
 
 interface Message {
   id: string;
@@ -31,7 +31,10 @@ const ChatBot: React.FC = () => {
   const [isTyping, setIsTyping] = useState(false);
   const [user, setUser] = useState<any>(null);
   const [healthInformation, setHealthInformation] = useState<HealthInfo[]>([]);
+  const [isRecording, setIsRecording] = useState(false);
+  const [isProcessingAudio, setIsProcessingAudio] = useState(false);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const voiceRecorderRef = useRef<VoiceRecorder | null>(null);
 
   // Check for authenticated user
   useEffect(() => {
@@ -73,6 +76,15 @@ const ChatBot: React.FC = () => {
       scrollAreaRef.current.scrollTop = scrollAreaRef.current.scrollHeight;
     }
   }, [messages]);
+
+  useEffect(() => {
+    voiceRecorderRef.current = new VoiceRecorder();
+    return () => {
+      if (voiceRecorderRef.current?.isRecording()) {
+        voiceRecorderRef.current.stopRecording();
+      }
+    };
+  }, []);
 
   const loadHealthInformation = async () => {
     try {
@@ -194,6 +206,66 @@ const ChatBot: React.FC = () => {
     return "I understand your health concern. Based on general medical knowledge, it's always best to maintain a healthy lifestyle with regular exercise, balanced nutrition, adequate sleep, and stress management. However, for specific medical advice or concerns, please consult with a qualified healthcare professional who can provide personalized guidance based on your individual health needs.";
   };
 
+  const handleStartRecording = async () => {
+    try {
+      setIsRecording(true);
+      await voiceRecorderRef.current?.startRecording();
+      toast({
+        title: "Recording started",
+        description: "Speak your message...",
+      });
+    } catch (error) {
+      console.error('Error starting recording:', error);
+      setIsRecording(false);
+      toast({
+        title: "Error",
+        description: "Failed to start recording. Please check microphone permissions.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleStopRecording = async () => {
+    try {
+      setIsRecording(false);
+      setIsProcessingAudio(true);
+      
+      const audioBlob = await voiceRecorderRef.current?.stopRecording();
+      if (!audioBlob) {
+        throw new Error('No audio recorded');
+      }
+
+      const base64Audio = await convertBlobToBase64(audioBlob);
+      
+      const { data, error } = await supabase.functions.invoke('speech-to-text', {
+        body: { audio: base64Audio }
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      if (data?.text) {
+        setInput(data.text);
+        toast({
+          title: "Speech recognized",
+          description: "You can now send or edit the message",
+        });
+      } else {
+        throw new Error('No text recognized from audio');
+      }
+    } catch (error) {
+      console.error('Error processing audio:', error);
+      toast({
+        title: "Error",
+        description: "Failed to process audio. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsProcessingAudio(false);
+    }
+  };
+
   const handleSend = async () => {
     if (!input.trim()) return;
 
@@ -293,13 +365,29 @@ const ChatBot: React.FC = () => {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyPress={handleKeyPress}
-              placeholder="Ask me about your health concerns..."
+              placeholder="Ask me about your health concerns or use voice..."
               className="flex-1"
+              disabled={isRecording || isProcessingAudio}
             />
-            <Button onClick={handleSend} disabled={!input.trim() || isTyping}>
+            <Button
+              onClick={isRecording ? handleStopRecording : handleStartRecording}
+              disabled={isTyping || isProcessingAudio}
+              variant="outline"
+              size="icon"
+              className={isRecording ? 'bg-red-500 text-white hover:bg-red-600' : ''}
+            >
+              {isRecording ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+            </Button>
+            <Button 
+              onClick={handleSend} 
+              disabled={!input.trim() || isTyping || isRecording || isProcessingAudio}
+            >
               <Send className="h-4 w-4" />
             </Button>
           </div>
+          {isProcessingAudio && (
+            <p className="text-sm text-gray-600 mt-2">Processing audio...</p>
+          )}
         </div>
       </CardContent>
     </Card>
