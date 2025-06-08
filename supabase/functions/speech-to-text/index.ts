@@ -21,21 +21,35 @@ serve(async (req) => {
 
     const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
     if (!OPENAI_API_KEY) {
-      throw new Error('OpenAI API key not configured');
+      console.error('OpenAI API key not configured');
+      return new Response(
+        JSON.stringify({ error: 'OpenAI API key not configured. Please add your OpenAI API key in Supabase Edge Function Secrets.' }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
     }
 
-    // Convert base64 to binary
+    console.log('Processing audio data...');
+
+    // Convert base64 to binary more efficiently
     const binaryString = atob(audio);
     const bytes = new Uint8Array(binaryString.length);
     for (let i = 0; i < binaryString.length; i++) {
       bytes[i] = binaryString.charCodeAt(i);
     }
     
+    console.log('Audio data converted, size:', bytes.length);
+    
     // Prepare form data
     const formData = new FormData();
-    const blob = new Blob([bytes], { type: 'audio/webm' });
+    const blob = new Blob([bytes], { type: 'audio/webm;codecs=opus' });
     formData.append('file', blob, 'audio.webm');
     formData.append('model', 'whisper-1');
+    formData.append('language', 'en');
+
+    console.log('Sending request to OpenAI...');
 
     // Send to OpenAI Whisper
     const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
@@ -48,13 +62,15 @@ serve(async (req) => {
 
     if (!response.ok) {
       const errorText = await response.text();
+      console.error('OpenAI API error:', errorText);
       throw new Error(`OpenAI API error: ${errorText}`);
     }
 
     const result = await response.json();
+    console.log('Transcription result:', result);
 
     return new Response(
-      JSON.stringify({ text: result.text }),
+      JSON.stringify({ text: result.text || '' }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 

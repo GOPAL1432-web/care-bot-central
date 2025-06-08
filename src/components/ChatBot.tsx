@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Send, Mic, MicOff } from 'lucide-react';
+import { Send, Mic, MicOff, Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { VoiceRecorder, convertBlobToBase64 } from '@/utils/VoiceRecorder';
@@ -33,8 +33,10 @@ const ChatBot: React.FC = () => {
   const [healthInformation, setHealthInformation] = useState<HealthInfo[]>([]);
   const [isRecording, setIsRecording] = useState(false);
   const [isProcessingAudio, setIsProcessingAudio] = useState(false);
+  const [recordingDuration, setRecordingDuration] = useState(0);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const voiceRecorderRef = useRef<VoiceRecorder | null>(null);
+  const recordingTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Check for authenticated user
   useEffect(() => {
@@ -82,6 +84,9 @@ const ChatBot: React.FC = () => {
     return () => {
       if (voiceRecorderRef.current?.isRecording()) {
         voiceRecorderRef.current.stopRecording();
+      }
+      if (recordingTimerRef.current) {
+        clearInterval(recordingTimerRef.current);
       }
     };
   }, []);
@@ -208,18 +213,27 @@ const ChatBot: React.FC = () => {
 
   const handleStartRecording = async () => {
     try {
+      console.log('Starting recording...');
       setIsRecording(true);
+      setRecordingDuration(0);
+      
       await voiceRecorderRef.current?.startRecording();
+      
+      // Start recording timer
+      recordingTimerRef.current = setInterval(() => {
+        setRecordingDuration(prev => prev + 1);
+      }, 1000);
+      
       toast({
         title: "Recording started",
-        description: "Speak your message...",
+        description: "Speak your message clearly. Click the button again to stop.",
       });
     } catch (error) {
       console.error('Error starting recording:', error);
       setIsRecording(false);
       toast({
         title: "Error",
-        description: "Failed to start recording. Please check microphone permissions.",
+        description: error instanceof Error ? error.message : "Failed to start recording. Please check microphone permissions.",
         variant: "destructive"
       });
     }
@@ -227,42 +241,57 @@ const ChatBot: React.FC = () => {
 
   const handleStopRecording = async () => {
     try {
+      console.log('Stopping recording...');
       setIsRecording(false);
       setIsProcessingAudio(true);
+      
+      // Clear recording timer
+      if (recordingTimerRef.current) {
+        clearInterval(recordingTimerRef.current);
+        recordingTimerRef.current = null;
+      }
       
       const audioBlob = await voiceRecorderRef.current?.stopRecording();
       if (!audioBlob) {
         throw new Error('No audio recorded');
       }
 
+      console.log('Audio recorded, converting to base64...');
       const base64Audio = await convertBlobToBase64(audioBlob);
       
+      console.log('Sending to speech-to-text function...');
       const { data, error } = await supabase.functions.invoke('speech-to-text', {
         body: { audio: base64Audio }
       });
 
       if (error) {
-        throw error;
+        console.error('Speech-to-text error:', error);
+        throw new Error(error.message || 'Failed to process audio');
       }
 
-      if (data?.text) {
-        setInput(data.text);
+      if (data?.text && data.text.trim()) {
+        setInput(data.text.trim());
         toast({
           title: "Speech recognized",
-          description: "You can now send or edit the message",
+          description: "Text has been added to the input. You can edit it or send it directly.",
         });
       } else {
-        throw new Error('No text recognized from audio');
+        toast({
+          title: "No speech detected",
+          description: "Please try speaking more clearly or check your microphone.",
+          variant: "destructive"
+        });
       }
     } catch (error) {
       console.error('Error processing audio:', error);
       toast({
         title: "Error",
-        description: "Failed to process audio. Please try again.",
+        description: error instanceof Error ? error.message : "Failed to process audio. Please try again.",
         variant: "destructive"
       });
     } finally {
       setIsProcessingAudio(false);
+      setRecordingDuration(0);
     }
   };
 
@@ -307,6 +336,12 @@ const ChatBot: React.FC = () => {
     if (e.key === 'Enter') {
       handleSend();
     }
+  };
+
+  const formatRecordingTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
   return (
@@ -374,9 +409,15 @@ const ChatBot: React.FC = () => {
               disabled={isTyping || isProcessingAudio}
               variant="outline"
               size="icon"
-              className={isRecording ? 'bg-red-500 text-white hover:bg-red-600' : ''}
+              className={`relative ${isRecording ? 'bg-red-500 text-white hover:bg-red-600' : ''}`}
             >
-              {isRecording ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+              {isProcessingAudio ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : isRecording ? (
+                <MicOff className="h-4 w-4" />
+              ) : (
+                <Mic className="h-4 w-4" />
+              )}
             </Button>
             <Button 
               onClick={handleSend} 
@@ -385,8 +426,14 @@ const ChatBot: React.FC = () => {
               <Send className="h-4 w-4" />
             </Button>
           </div>
+          {isRecording && (
+            <div className="flex items-center justify-center mt-2 text-red-600">
+              <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse mr-2"></div>
+              <p className="text-sm font-medium">Recording... {formatRecordingTime(recordingDuration)}</p>
+            </div>
+          )}
           {isProcessingAudio && (
-            <p className="text-sm text-gray-600 mt-2">Processing audio...</p>
+            <p className="text-sm text-gray-600 mt-2 text-center">Processing audio...</p>
           )}
         </div>
       </CardContent>
