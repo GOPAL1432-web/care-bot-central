@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -37,6 +38,52 @@ const ChatBot: React.FC = () => {
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const voiceRecorderRef = useRef<VoiceRecorder | null>(null);
   const recordingTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Helper function to check if query is disease-related
+  const isDiseaseQuery = (input: string): boolean => {
+    const diseaseKeywords = [
+      'disease', 'illness', 'condition', 'symptom', 'syndrome', 'disorder',
+      'infection', 'virus', 'bacteria', 'cancer', 'tumor', 'pain', 'ache',
+      'fever', 'inflammation', 'allergy', 'diabetes', 'hypertension',
+      'depression', 'anxiety', 'asthma', 'arthritis'
+    ];
+    
+    return diseaseKeywords.some(keyword => input.includes(keyword));
+  };
+
+  // Helper function to suggest related disease terms
+  const getSuggestedDiseaseTerms = (input: string): string => {
+    const commonDiseases = [
+      'diabetes', 'hypertension', 'heart disease', 'asthma', 'arthritis',
+      'depression', 'anxiety', 'cancer', 'stroke', 'pneumonia',
+      'bronchitis', 'allergies', 'migraine', 'obesity'
+    ];
+    
+    // Find diseases that might be related to the search
+    const related = commonDiseases.filter(disease => 
+      disease.includes(input.split(' ')[0]) || 
+      input.includes(disease.split(' ')[0])
+    );
+    
+    if (related.length > 0) {
+      return related.slice(0, 3).join(', ');
+    }
+    
+    return 'specific disease name, symptoms you\'re experiencing, or the affected body part';
+  };
+
+  // Helper function to calculate string similarity (simple implementation)
+  const calculateSimilarity = (str1: string, str2: string): number => {
+    if (str1.length < 3 || str2.length < 3) return 0;
+    
+    const longer = str1.length > str2.length ? str1 : str2;
+    const shorter = str1.length > str2.length ? str2 : str1;
+    
+    if (longer.length === 0) return 1.0;
+    
+    const matches = shorter.split('').filter((char, i) => longer[i] === char).length;
+    return matches / longer.length;
+  };
 
   // Check for authenticated user
   useEffect(() => {
@@ -214,7 +261,7 @@ const ChatBot: React.FC = () => {
           titleWords.some(titleWord => 
             titleWord.includes(searchTerm) || 
             searchTerm.includes(titleWord) ||
-            this.calculateSimilarity(titleWord, searchTerm) > 0.7
+            calculateSimilarity(titleWord, searchTerm) > 0.7
           ) ||
           categoryWords.some(catWord => 
             catWord.includes(searchTerm) || 
@@ -237,8 +284,8 @@ const ChatBot: React.FC = () => {
     }
 
     // Disease-specific fallback responses
-    if (this.isDiseaseQuery(input)) {
-      const suggestedTerms = this.getSuggestedDiseaseTerms(input);
+    if (isDiseaseQuery(input)) {
+      const suggestedTerms = getSuggestedDiseaseTerms(input);
       return `I understand you're asking about a health condition. While I don't have specific information about "${input}" in my database, I recommend:\n\n1. Consulting with a healthcare professional for accurate diagnosis and treatment\n2. Trying more specific search terms like: ${suggestedTerms}\n3. Searching for the category of condition (e.g., "heart disease", "skin condition", "respiratory illness")\n\nPlease feel free to ask about specific symptoms or health topics!`;
     }
 
@@ -260,52 +307,6 @@ const ChatBot: React.FC = () => {
 
     // Default response
     return "I understand your health concern. Based on general medical knowledge, it's always best to maintain a healthy lifestyle with regular exercise, balanced nutrition, adequate sleep, and stress management. However, for specific medical advice or concerns, please consult with a qualified healthcare professional who can provide personalized guidance based on your individual health needs.";
-  };
-
-  // Helper method to check if query is disease-related
-  private isDiseaseQuery = (input: string): boolean => {
-    const diseaseKeywords = [
-      'disease', 'illness', 'condition', 'symptom', 'syndrome', 'disorder',
-      'infection', 'virus', 'bacteria', 'cancer', 'tumor', 'pain', 'ache',
-      'fever', 'inflammation', 'allergy', 'diabetes', 'hypertension',
-      'depression', 'anxiety', 'asthma', 'arthritis'
-    ];
-    
-    return diseaseKeywords.some(keyword => input.includes(keyword));
-  };
-
-  // Helper method to suggest related disease terms
-  private getSuggestedDiseaseTerms = (input: string): string => {
-    const commonDiseases = [
-      'diabetes', 'hypertension', 'heart disease', 'asthma', 'arthritis',
-      'depression', 'anxiety', 'cancer', 'stroke', 'pneumonia',
-      'bronchitis', 'allergies', 'migraine', 'obesity'
-    ];
-    
-    // Find diseases that might be related to the search
-    const related = commonDiseases.filter(disease => 
-      disease.includes(input.split(' ')[0]) || 
-      input.includes(disease.split(' ')[0])
-    );
-    
-    if (related.length > 0) {
-      return related.slice(0, 3).join(', ');
-    }
-    
-    return 'specific disease name, symptoms you\'re experiencing, or the affected body part';
-  };
-
-  // Helper method to calculate string similarity (simple implementation)
-  private calculateSimilarity = (str1: string, str2: string): number => {
-    if (str1.length < 3 || str2.length < 3) return 0;
-    
-    const longer = str1.length > str2.length ? str1 : str2;
-    const shorter = str1.length > str2.length ? str2 : str1;
-    
-    if (longer.length === 0) return 1.0;
-    
-    const matches = shorter.split('').filter((char, i) => longer[i] === char).length;
-    return matches / longer.length;
   };
 
   const handleStartRecording = async () => {
