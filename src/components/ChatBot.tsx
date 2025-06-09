@@ -5,10 +5,10 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Send, Mic, MicOff, Loader2, AlertCircle } from 'lucide-react';
+import { Send } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { VoiceRecorder, convertBlobToBase64 } from '@/utils/VoiceRecorder';
+import MicrophoneButton from './MicrophoneButton';
 
 interface Message {
   id: string;
@@ -32,13 +32,7 @@ const ChatBot: React.FC = () => {
   const [isTyping, setIsTyping] = useState(false);
   const [user, setUser] = useState<any>(null);
   const [healthInformation, setHealthInformation] = useState<HealthInfo[]>([]);
-  const [isRecording, setIsRecording] = useState(false);
-  const [isProcessingAudio, setIsProcessingAudio] = useState(false);
-  const [recordingDuration, setRecordingDuration] = useState(0);
-  const [microphoneError, setMicrophoneError] = useState<string | null>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
-  const voiceRecorderRef = useRef<VoiceRecorder | null>(null);
-  const recordingTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Helper function to check if query is disease-related
   const isDiseaseQuery = (input: string): boolean => {
@@ -176,18 +170,6 @@ const ChatBot: React.FC = () => {
     }
   }, [messages]);
 
-  useEffect(() => {
-    voiceRecorderRef.current = new VoiceRecorder();
-    return () => {
-      if (voiceRecorderRef.current?.isRecording()) {
-        voiceRecorderRef.current.stopRecording();
-      }
-      if (recordingTimerRef.current) {
-        clearInterval(recordingTimerRef.current);
-      }
-    };
-  }, []);
-
   const loadHealthInformation = async () => {
     try {
       const { data, error } = await (supabase as any)
@@ -298,139 +280,8 @@ const ChatBot: React.FC = () => {
     return "I understand your health concern. Based on general medical knowledge, it's always best to maintain a healthy lifestyle with regular exercise, balanced nutrition, adequate sleep, and stress management. However, for specific medical advice or concerns, please consult with a qualified healthcare professional who can provide personalized guidance based on your individual health needs.";
   };
 
-  const checkMicrophonePermissions = async (): Promise<boolean> => {
-    try {
-      const permission = await navigator.permissions.query({ name: 'microphone' as PermissionName });
-      return permission.state === 'granted';
-    } catch (error) {
-      console.log('Permission API not supported, will try to request access directly');
-      return false;
-    }
-  };
-
-  const handleStartRecording = async () => {
-    try {
-      console.log('Starting recording...');
-      setMicrophoneError(null);
-      setIsRecording(true);
-      setRecordingDuration(0);
-      
-      // Check microphone permissions first
-      const hasPermission = await checkMicrophonePermissions();
-      if (!hasPermission) {
-        console.log('Microphone permission not granted, requesting access...');
-      }
-      
-      await voiceRecorderRef.current?.startRecording();
-      
-      // Start recording timer
-      recordingTimerRef.current = setInterval(() => {
-        setRecordingDuration(prev => prev + 1);
-      }, 1000);
-      
-      toast({
-        title: "Recording started",
-        description: "Speak your message clearly. Click the button again to stop.",
-      });
-    } catch (error) {
-      console.error('Error starting recording:', error);
-      setIsRecording(false);
-      setMicrophoneError(error instanceof Error ? error.message : 'Unknown microphone error');
-      
-      let errorMessage = "Failed to start recording. ";
-      if (error instanceof Error) {
-        if (error.message.includes('denied')) {
-          errorMessage += "Please allow microphone permissions and try again.";
-        } else if (error.message.includes('NotFound')) {
-          errorMessage += "No microphone found. Please connect a microphone and try again.";
-        } else {
-          errorMessage += error.message;
-        }
-      }
-      
-      toast({
-        title: "Microphone Error",
-        description: errorMessage,
-        variant: "destructive"
-      });
-    }
-  };
-
-  const handleStopRecording = async () => {
-    try {
-      console.log('Stopping recording...');
-      setIsRecording(false);
-      setIsProcessingAudio(true);
-      
-      // Clear recording timer
-      if (recordingTimerRef.current) {
-        clearInterval(recordingTimerRef.current);
-        recordingTimerRef.current = null;
-      }
-      
-      const audioBlob = await voiceRecorderRef.current?.stopRecording();
-      if (!audioBlob) {
-        throw new Error('No audio recorded');
-      }
-
-      console.log('Audio recorded, converting to base64...');
-      const base64Audio = await convertBlobToBase64(audioBlob);
-      
-      console.log('Sending to speech-to-text function...');
-      const { data, error } = await supabase.functions.invoke('speech-to-text', {
-        body: { audio: base64Audio }
-      });
-
-      if (error) {
-        console.error('Speech-to-text error:', error);
-        
-        if (error.message?.includes('OpenAI API key not configured') || 
-            (data && data.error && data.error.includes('OpenAI API key not configured'))) {
-          toast({
-            title: "Configuration Required",
-            description: "OpenAI API key needs to be configured. Please contact the administrator to set up the speech-to-text feature.",
-            variant: "destructive"
-          });
-        } else if (error.message?.includes('Edge Function returned a non-2xx status code')) {
-          toast({
-            title: "Service Error",
-            description: "Speech-to-text service is currently unavailable. Please try typing your message instead.",
-            variant: "destructive"
-          });
-        } else {
-          toast({
-            title: "Error",
-            description: error.message || 'Failed to process audio. Please try again.',
-            variant: "destructive"
-          });
-        }
-        return;
-      }
-
-      if (data?.text && data.text.trim()) {
-        setInput(data.text.trim());
-        toast({
-          title: "Speech recognized",
-          description: "Text has been added to the input. You can edit it or send it directly.",
-        });
-      } else {
-        toast({
-          title: "No speech detected",
-          description: "Please try speaking more clearly or check your microphone.",
-          variant: "destructive"
-        });
-      }
-    } catch (error) {
-      console.error('Error processing audio:', error);
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to process audio. Please try again.",
-        variant: "destructive"
-      });
-    } finally {
-      setIsProcessingAudio(false);
-      setRecordingDuration(0);
-    }
+  const handleTranscription = (text: string) => {
+    setInput(text);
   };
 
   const handleSend = async () => {
@@ -471,12 +322,6 @@ const ChatBot: React.FC = () => {
     if (e.key === 'Enter') {
       handleSend();
     }
-  };
-
-  const formatRecordingTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
   return (
@@ -530,12 +375,6 @@ const ChatBot: React.FC = () => {
           </div>
         </ScrollArea>
         <div className="p-4 border-t">
-          {microphoneError && (
-            <div className="mb-2 p-2 bg-red-50 border border-red-200 rounded-md flex items-center space-x-2">
-              <AlertCircle className="h-4 w-4 text-red-600" />
-              <p className="text-sm text-red-600">{microphoneError}</p>
-            </div>
-          )}
           <div className="flex space-x-2">
             <Input
               value={input}
@@ -543,39 +382,18 @@ const ChatBot: React.FC = () => {
               onKeyPress={handleKeyPress}
               placeholder="Ask me about your health concerns or use voice..."
               className="flex-1"
-              disabled={isRecording || isProcessingAudio}
             />
-            <Button
-              onClick={isRecording ? handleStopRecording : handleStartRecording}
-              disabled={isTyping || isProcessingAudio}
-              variant="outline"
-              size="icon"
-              className={`relative ${isRecording ? 'bg-red-500 text-white hover:bg-red-600' : ''}`}
-            >
-              {isProcessingAudio ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : isRecording ? (
-                <MicOff className="h-4 w-4" />
-              ) : (
-                <Mic className="h-4 w-4" />
-              )}
-            </Button>
+            <MicrophoneButton 
+              onTranscription={handleTranscription}
+              disabled={isTyping}
+            />
             <Button 
               onClick={handleSend} 
-              disabled={!input.trim() || isTyping || isRecording || isProcessingAudio}
+              disabled={!input.trim() || isTyping}
             >
               <Send className="h-4 w-4" />
             </Button>
           </div>
-          {isRecording && (
-            <div className="flex items-center justify-center mt-2 text-red-600">
-              <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse mr-2"></div>
-              <p className="text-sm font-medium">Recording... {formatRecordingTime(recordingDuration)}</p>
-            </div>
-          )}
-          {isProcessingAudio && (
-            <p className="text-sm text-gray-600 mt-2 text-center">Processing audio...</p>
-          )}
         </div>
       </CardContent>
     </Card>
