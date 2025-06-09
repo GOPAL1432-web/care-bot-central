@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Send, Mic, MicOff, Loader2 } from 'lucide-react';
+import { Send, Mic, MicOff, Loader2, AlertCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { VoiceRecorder, convertBlobToBase64 } from '@/utils/VoiceRecorder';
@@ -35,6 +35,7 @@ const ChatBot: React.FC = () => {
   const [isRecording, setIsRecording] = useState(false);
   const [isProcessingAudio, setIsProcessingAudio] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
+  const [microphoneError, setMicrophoneError] = useState<string | null>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const voiceRecorderRef = useRef<VoiceRecorder | null>(null);
   const recordingTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -48,7 +49,7 @@ const ChatBot: React.FC = () => {
       'depression', 'anxiety', 'asthma', 'arthritis'
     ];
     
-    return diseaseKeywords.some(keyword => input.includes(keyword));
+    return diseaseKeywords.some(keyword => input.toLowerCase().includes(keyword));
   };
 
   // Helper function to suggest related disease terms
@@ -59,7 +60,6 @@ const ChatBot: React.FC = () => {
       'bronchitis', 'allergies', 'migraine', 'obesity'
     ];
     
-    // Find diseases that might be related to the search
     const related = commonDiseases.filter(disease => 
       disease.includes(input.split(' ')[0]) || 
       input.includes(disease.split(' ')[0])
@@ -72,7 +72,7 @@ const ChatBot: React.FC = () => {
     return 'specific disease name, symptoms you\'re experiencing, or the affected body part';
   };
 
-  // Helper function to calculate string similarity (simple implementation)
+  // Helper function to calculate string similarity
   const calculateSimilarity = (str1: string, str2: string): number => {
     if (str1.length < 3 || str2.length < 3) return 0;
     
@@ -83,6 +83,57 @@ const ChatBot: React.FC = () => {
     
     const matches = shorter.split('').filter((char, i) => longer[i] === char).length;
     return matches / longer.length;
+  };
+
+  // Enhanced disease search function
+  const searchHealthInformation = (userInput: string): HealthInfo | null => {
+    const input = userInput.toLowerCase();
+    const searchTerms = input.split(' ').filter(term => term.length > 2);
+    
+    // Priority 1: Exact title match
+    let relevantInfo = healthInformation.find(info => {
+      const title = info.title.toLowerCase();
+      return searchTerms.some(searchTerm => title === searchTerm);
+    });
+
+    // Priority 2: Title contains search term
+    if (!relevantInfo) {
+      relevantInfo = healthInformation.find(info => {
+        const title = info.title.toLowerCase();
+        return searchTerms.some(searchTerm => 
+          title.includes(searchTerm) && searchTerm.length > 3
+        );
+      });
+    }
+
+    // Priority 3: Category or tags match
+    if (!relevantInfo) {
+      relevantInfo = healthInformation.find(info => {
+        const category = info.category.toLowerCase();
+        const tags = info.tags ? info.tags.toLowerCase() : '';
+        
+        return searchTerms.some(searchTerm => 
+          category.includes(searchTerm) || tags.includes(searchTerm)
+        );
+      });
+    }
+
+    // Priority 4: Partial matching with similarity
+    if (!relevantInfo) {
+      relevantInfo = healthInformation.find(info => {
+        const titleWords = info.title.toLowerCase().split(' ');
+        
+        return searchTerms.some(searchTerm => 
+          titleWords.some(titleWord => 
+            titleWord.includes(searchTerm) || 
+            searchTerm.includes(titleWord) ||
+            calculateSimilarity(titleWord, searchTerm) > 0.7
+          )
+        );
+      });
+    }
+
+    return relevantInfo || null;
   };
 
   // Check for authenticated user
@@ -110,7 +161,6 @@ const ChatBot: React.FC = () => {
     if (user) {
       loadChatHistory();
     } else {
-      // Set initial bot message for non-authenticated users
       setMessages([{
         id: '1',
         text: 'Hello! I\'m your AI healthcare assistant. How can I help you today?',
@@ -140,7 +190,6 @@ const ChatBot: React.FC = () => {
 
   const loadHealthInformation = async () => {
     try {
-      // Use type assertion to bypass TypeScript issues until types are regenerated
       const { data, error } = await (supabase as any)
         .from('health_information')
         .select('*');
@@ -173,7 +222,6 @@ const ChatBot: React.FC = () => {
         }));
         setMessages(loadedMessages);
       } else {
-        // If no chat history, add initial bot message
         const initialMessage = {
           id: '1',
           text: 'Hello! I\'m your AI healthcare assistant. How can I help you today?',
@@ -218,75 +266,17 @@ const ChatBot: React.FC = () => {
   };
 
   const generateHealthResponse = (userInput: string): string => {
-    const input = userInput.toLowerCase();
-    
-    // Enhanced disease-specific search terms
-    const searchTerms = input.split(' ').filter(term => term.length > 2);
-    
-    // Priority search for exact disease matches
-    let relevantInfo = healthInformation.find(info => {
-      const title = info.title.toLowerCase();
-      const category = info.category.toLowerCase();
-      const tags = info.tags ? info.tags.toLowerCase() : '';
-      const description = info.description.toLowerCase();
-      
-      // Check for exact disease name matches first
-      return searchTerms.some(searchTerm => {
-        // Exact title match (highest priority)
-        if (title === searchTerm) return true;
-        
-        // Disease name in title
-        if (title.includes(searchTerm) && searchTerm.length > 4) return true;
-        
-        // Category match for disease types
-        if (category.includes(searchTerm)) return true;
-        
-        // Tag match for disease classifications
-        if (tags.includes(searchTerm)) return true;
-        
-        return false;
-      });
-    });
+    const relevantInfo = searchHealthInformation(userInput);
 
-    // If no exact match, try partial matching
-    if (!relevantInfo) {
-      relevantInfo = healthInformation.find(info => {
-        const titleWords = info.title.toLowerCase().split(' ');
-        const categoryWords = info.category.toLowerCase().split(' ');
-        const tagWords = info.tags ? info.tags.toLowerCase().split(',').map(tag => tag.trim()) : [];
-        const descriptionWords = info.description.toLowerCase().split(' ');
-        
-        // Check if any search term has partial matches
-        return searchTerms.some(searchTerm => 
-          titleWords.some(titleWord => 
-            titleWord.includes(searchTerm) || 
-            searchTerm.includes(titleWord) ||
-            calculateSimilarity(titleWord, searchTerm) > 0.7
-          ) ||
-          categoryWords.some(catWord => 
-            catWord.includes(searchTerm) || 
-            searchTerm.includes(catWord)
-          ) ||
-          tagWords.some(tag => 
-            tag.includes(searchTerm) || 
-            searchTerm.includes(tag)
-          ) ||
-          descriptionWords.some(descWord => 
-            descWord.includes(searchTerm) && searchTerm.length > 4
-          )
-        );
-      });
-    }
-
-    // If we found relevant health information
     if (relevantInfo) {
       return `**${relevantInfo.title}**\n\n${relevantInfo.description}\n\n**Category:** ${relevantInfo.category}${relevantInfo.tags ? `\n**Related Topics:** ${relevantInfo.tags}` : ''}\n\n*Please remember that this is general health information. For personalized medical advice, always consult with a healthcare professional.*`;
     }
 
-    // Disease-specific fallback responses
+    const input = userInput.toLowerCase();
+
     if (isDiseaseQuery(input)) {
       const suggestedTerms = getSuggestedDiseaseTerms(input);
-      return `I understand you're asking about a health condition. While I don't have specific information about "${input}" in my database, I recommend:\n\n1. Consulting with a healthcare professional for accurate diagnosis and treatment\n2. Trying more specific search terms like: ${suggestedTerms}\n3. Searching for the category of condition (e.g., "heart disease", "skin condition", "respiratory illness")\n\nPlease feel free to ask about specific symptoms or health topics!`;
+      return `I understand you're asking about a health condition. While I don't have specific information about "${userInput}" in my database, I recommend:\n\n1. Consulting with a healthcare professional for accurate diagnosis and treatment\n2. Trying more specific search terms like: ${suggestedTerms}\n3. Searching for the category of condition (e.g., "heart disease", "skin condition", "respiratory illness")\n\nPlease feel free to ask about specific symptoms or health topics!`;
     }
 
     if (input.includes('exercise') || input.includes('workout') || input.includes('fitness')) {
@@ -305,15 +295,31 @@ const ChatBot: React.FC = () => {
       return "Managing stress and maintaining mental health is crucial for overall well-being. Try relaxation techniques like deep breathing, meditation, or yoga. Regular exercise, adequate sleep, and social connections can also help. If you're experiencing persistent mental health concerns, please reach out to a mental health professional.";
     }
 
-    // Default response
     return "I understand your health concern. Based on general medical knowledge, it's always best to maintain a healthy lifestyle with regular exercise, balanced nutrition, adequate sleep, and stress management. However, for specific medical advice or concerns, please consult with a qualified healthcare professional who can provide personalized guidance based on your individual health needs.";
+  };
+
+  const checkMicrophonePermissions = async (): Promise<boolean> => {
+    try {
+      const permission = await navigator.permissions.query({ name: 'microphone' as PermissionName });
+      return permission.state === 'granted';
+    } catch (error) {
+      console.log('Permission API not supported, will try to request access directly');
+      return false;
+    }
   };
 
   const handleStartRecording = async () => {
     try {
       console.log('Starting recording...');
+      setMicrophoneError(null);
       setIsRecording(true);
       setRecordingDuration(0);
+      
+      // Check microphone permissions first
+      const hasPermission = await checkMicrophonePermissions();
+      if (!hasPermission) {
+        console.log('Microphone permission not granted, requesting access...');
+      }
       
       await voiceRecorderRef.current?.startRecording();
       
@@ -329,9 +335,22 @@ const ChatBot: React.FC = () => {
     } catch (error) {
       console.error('Error starting recording:', error);
       setIsRecording(false);
+      setMicrophoneError(error instanceof Error ? error.message : 'Unknown microphone error');
+      
+      let errorMessage = "Failed to start recording. ";
+      if (error instanceof Error) {
+        if (error.message.includes('denied')) {
+          errorMessage += "Please allow microphone permissions and try again.";
+        } else if (error.message.includes('NotFound')) {
+          errorMessage += "No microphone found. Please connect a microphone and try again.";
+        } else {
+          errorMessage += error.message;
+        }
+      }
+      
       toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to start recording. Please check microphone permissions.",
+        title: "Microphone Error",
+        description: errorMessage,
         variant: "destructive"
       });
     }
@@ -365,11 +384,17 @@ const ChatBot: React.FC = () => {
       if (error) {
         console.error('Speech-to-text error:', error);
         
-        // Check if it's an API key configuration error
-        if (error.message?.includes('OpenAI API key not configured')) {
+        if (error.message?.includes('OpenAI API key not configured') || 
+            (data && data.error && data.error.includes('OpenAI API key not configured'))) {
           toast({
-            title: "Configuration Error",
-            description: "OpenAI API key is not configured. Please add it to Supabase Edge Function Secrets.",
+            title: "Configuration Required",
+            description: "OpenAI API key needs to be configured. Please contact the administrator to set up the speech-to-text feature.",
+            variant: "destructive"
+          });
+        } else if (error.message?.includes('Edge Function returned a non-2xx status code')) {
+          toast({
+            title: "Service Error",
+            description: "Speech-to-text service is currently unavailable. Please try typing your message instead.",
             variant: "destructive"
           });
         } else {
@@ -422,12 +447,10 @@ const ChatBot: React.FC = () => {
     setInput('');
     setIsTyping(true);
 
-    // Save user message to database
     if (user) {
       await saveMessageToDatabase(userMessage);
     }
 
-    // Generate AI response based on health information
     setTimeout(async () => {
       const botResponse: Message = {
         id: (Date.now() + 1).toString(),
@@ -438,7 +461,6 @@ const ChatBot: React.FC = () => {
       setMessages(prev => [...prev, botResponse]);
       setIsTyping(false);
 
-      // Save bot response to database
       if (user) {
         await saveMessageToDatabase(botResponse);
       }
@@ -508,6 +530,12 @@ const ChatBot: React.FC = () => {
           </div>
         </ScrollArea>
         <div className="p-4 border-t">
+          {microphoneError && (
+            <div className="mb-2 p-2 bg-red-50 border border-red-200 rounded-md flex items-center space-x-2">
+              <AlertCircle className="h-4 w-4 text-red-600" />
+              <p className="text-sm text-red-600">{microphoneError}</p>
+            </div>
+          )}
           <div className="flex space-x-2">
             <Input
               value={input}
