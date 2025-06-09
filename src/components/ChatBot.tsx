@@ -173,31 +173,73 @@ const ChatBot: React.FC = () => {
   const generateHealthResponse = (userInput: string): string => {
     const input = userInput.toLowerCase();
     
-    // Enhanced disease and health condition searching
+    // Enhanced disease-specific search terms
     const searchTerms = input.split(' ').filter(term => term.length > 2);
     
-    // Find relevant health information based on user input
-    const relevantInfo = healthInformation.find(info => {
-      const titleWords = info.title.toLowerCase().split(' ');
-      const categoryWords = info.category.toLowerCase().split(' ');
-      const tagWords = info.tags ? info.tags.toLowerCase().split(',').map(tag => tag.trim()) : [];
+    // Priority search for exact disease matches
+    let relevantInfo = healthInformation.find(info => {
+      const title = info.title.toLowerCase();
+      const category = info.category.toLowerCase();
+      const tags = info.tags ? info.tags.toLowerCase() : '';
+      const description = info.description.toLowerCase();
       
-      // Check if any search term matches title, category, or tags
-      return searchTerms.some(searchTerm => 
-        titleWords.some(titleWord => titleWord.includes(searchTerm) || searchTerm.includes(titleWord)) ||
-        categoryWords.some(catWord => catWord.includes(searchTerm) || searchTerm.includes(catWord)) ||
-        tagWords.some(tag => tag.includes(searchTerm) || searchTerm.includes(tag)) ||
-        info.description.toLowerCase().includes(searchTerm)
-      );
+      // Check for exact disease name matches first
+      return searchTerms.some(searchTerm => {
+        // Exact title match (highest priority)
+        if (title === searchTerm) return true;
+        
+        // Disease name in title
+        if (title.includes(searchTerm) && searchTerm.length > 4) return true;
+        
+        // Category match for disease types
+        if (category.includes(searchTerm)) return true;
+        
+        // Tag match for disease classifications
+        if (tags.includes(searchTerm)) return true;
+        
+        return false;
+      });
     });
 
+    // If no exact match, try partial matching
+    if (!relevantInfo) {
+      relevantInfo = healthInformation.find(info => {
+        const titleWords = info.title.toLowerCase().split(' ');
+        const categoryWords = info.category.toLowerCase().split(' ');
+        const tagWords = info.tags ? info.tags.toLowerCase().split(',').map(tag => tag.trim()) : [];
+        const descriptionWords = info.description.toLowerCase().split(' ');
+        
+        // Check if any search term has partial matches
+        return searchTerms.some(searchTerm => 
+          titleWords.some(titleWord => 
+            titleWord.includes(searchTerm) || 
+            searchTerm.includes(titleWord) ||
+            this.calculateSimilarity(titleWord, searchTerm) > 0.7
+          ) ||
+          categoryWords.some(catWord => 
+            catWord.includes(searchTerm) || 
+            searchTerm.includes(catWord)
+          ) ||
+          tagWords.some(tag => 
+            tag.includes(searchTerm) || 
+            searchTerm.includes(tag)
+          ) ||
+          descriptionWords.some(descWord => 
+            descWord.includes(searchTerm) && searchTerm.length > 4
+          )
+        );
+      });
+    }
+
+    // If we found relevant health information
     if (relevantInfo) {
       return `**${relevantInfo.title}**\n\n${relevantInfo.description}\n\n**Category:** ${relevantInfo.category}${relevantInfo.tags ? `\n**Related Topics:** ${relevantInfo.tags}` : ''}\n\n*Please remember that this is general health information. For personalized medical advice, always consult with a healthcare professional.*`;
     }
 
-    // Enhanced fallback responses for common health topics
-    if (input.includes('disease') || input.includes('illness') || input.includes('condition') || input.includes('symptom')) {
-      return "I understand you're asking about a health condition. While I don't have specific information about this condition in my database, I recommend consulting with a healthcare professional for accurate diagnosis and treatment options. You can also search for more specific terms related to your concern.";
+    // Disease-specific fallback responses
+    if (this.isDiseaseQuery(input)) {
+      const suggestedTerms = this.getSuggestedDiseaseTerms(input);
+      return `I understand you're asking about a health condition. While I don't have specific information about "${input}" in my database, I recommend:\n\n1. Consulting with a healthcare professional for accurate diagnosis and treatment\n2. Trying more specific search terms like: ${suggestedTerms}\n3. Searching for the category of condition (e.g., "heart disease", "skin condition", "respiratory illness")\n\nPlease feel free to ask about specific symptoms or health topics!`;
     }
 
     if (input.includes('exercise') || input.includes('workout') || input.includes('fitness')) {
@@ -218,6 +260,52 @@ const ChatBot: React.FC = () => {
 
     // Default response
     return "I understand your health concern. Based on general medical knowledge, it's always best to maintain a healthy lifestyle with regular exercise, balanced nutrition, adequate sleep, and stress management. However, for specific medical advice or concerns, please consult with a qualified healthcare professional who can provide personalized guidance based on your individual health needs.";
+  };
+
+  // Helper method to check if query is disease-related
+  private isDiseaseQuery = (input: string): boolean => {
+    const diseaseKeywords = [
+      'disease', 'illness', 'condition', 'symptom', 'syndrome', 'disorder',
+      'infection', 'virus', 'bacteria', 'cancer', 'tumor', 'pain', 'ache',
+      'fever', 'inflammation', 'allergy', 'diabetes', 'hypertension',
+      'depression', 'anxiety', 'asthma', 'arthritis'
+    ];
+    
+    return diseaseKeywords.some(keyword => input.includes(keyword));
+  };
+
+  // Helper method to suggest related disease terms
+  private getSuggestedDiseaseTerms = (input: string): string => {
+    const commonDiseases = [
+      'diabetes', 'hypertension', 'heart disease', 'asthma', 'arthritis',
+      'depression', 'anxiety', 'cancer', 'stroke', 'pneumonia',
+      'bronchitis', 'allergies', 'migraine', 'obesity'
+    ];
+    
+    // Find diseases that might be related to the search
+    const related = commonDiseases.filter(disease => 
+      disease.includes(input.split(' ')[0]) || 
+      input.includes(disease.split(' ')[0])
+    );
+    
+    if (related.length > 0) {
+      return related.slice(0, 3).join(', ');
+    }
+    
+    return 'specific disease name, symptoms you\'re experiencing, or the affected body part';
+  };
+
+  // Helper method to calculate string similarity (simple implementation)
+  private calculateSimilarity = (str1: string, str2: string): number => {
+    if (str1.length < 3 || str2.length < 3) return 0;
+    
+    const longer = str1.length > str2.length ? str1 : str2;
+    const shorter = str1.length > str2.length ? str2 : str1;
+    
+    if (longer.length === 0) return 1.0;
+    
+    const matches = shorter.split('').filter((char, i) => longer[i] === char).length;
+    return matches / longer.length;
   };
 
   const handleStartRecording = async () => {
