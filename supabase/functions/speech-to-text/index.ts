@@ -23,7 +23,10 @@ serve(async (req) => {
     if (!OPENAI_API_KEY) {
       console.error('OpenAI API key not configured');
       return new Response(
-        JSON.stringify({ error: 'OpenAI API key not configured. Please add your OpenAI API key in Supabase Edge Function Secrets.' }),
+        JSON.stringify({ 
+          error: 'OpenAI API key not configured',
+          message: 'Please add your OpenAI API key in Supabase Edge Function Secrets under the name OPENAI_API_KEY'
+        }),
         {
           status: 500,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -63,7 +66,16 @@ serve(async (req) => {
     if (!response.ok) {
       const errorText = await response.text();
       console.error('OpenAI API error:', errorText);
-      throw new Error(`OpenAI API error: ${errorText}`);
+      return new Response(
+        JSON.stringify({ 
+          error: `OpenAI API error: ${response.status}`,
+          message: errorText 
+        }),
+        {
+          status: response.status,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
     }
 
     const result = await response.json();
@@ -77,7 +89,10 @@ serve(async (req) => {
   } catch (error) {
     console.error('Speech-to-text error:', error);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ 
+        error: error.message,
+        type: 'processing_error'
+      }),
       {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

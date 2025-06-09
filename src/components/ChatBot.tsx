@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -266,7 +267,22 @@ const ChatBot: React.FC = () => {
 
       if (error) {
         console.error('Speech-to-text error:', error);
-        throw new Error(error.message || 'Failed to process audio');
+        
+        // Check if it's an API key configuration error
+        if (error.message?.includes('OpenAI API key not configured')) {
+          toast({
+            title: "Configuration Error",
+            description: "OpenAI API key is not configured. Please add it to Supabase Edge Function Secrets.",
+            variant: "destructive"
+          });
+        } else {
+          toast({
+            title: "Error",
+            description: error.message || 'Failed to process audio. Please try again.',
+            variant: "destructive"
+          });
+        }
+        return;
       }
 
       if (data?.text && data.text.trim()) {
