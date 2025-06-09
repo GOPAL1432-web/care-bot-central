@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -174,24 +173,33 @@ const ChatBot: React.FC = () => {
   const generateHealthResponse = (userInput: string): string => {
     const input = userInput.toLowerCase();
     
+    // Enhanced disease and health condition searching
+    const searchTerms = input.split(' ').filter(term => term.length > 2);
+    
     // Find relevant health information based on user input
     const relevantInfo = healthInformation.find(info => {
-      const searchTerms = [
-        info.title.toLowerCase(),
-        info.category.toLowerCase(),
-        ...info.tags.toLowerCase().split(',').map(tag => tag.trim())
-      ];
+      const titleWords = info.title.toLowerCase().split(' ');
+      const categoryWords = info.category.toLowerCase().split(' ');
+      const tagWords = info.tags ? info.tags.toLowerCase().split(',').map(tag => tag.trim()) : [];
       
-      return searchTerms.some(term => 
-        input.includes(term) || term.includes(input.split(' ')[0])
+      // Check if any search term matches title, category, or tags
+      return searchTerms.some(searchTerm => 
+        titleWords.some(titleWord => titleWord.includes(searchTerm) || searchTerm.includes(titleWord)) ||
+        categoryWords.some(catWord => catWord.includes(searchTerm) || searchTerm.includes(catWord)) ||
+        tagWords.some(tag => tag.includes(searchTerm) || searchTerm.includes(tag)) ||
+        info.description.toLowerCase().includes(searchTerm)
       );
     });
 
     if (relevantInfo) {
-      return `Based on our health information database: ${relevantInfo.description}\n\nCategory: ${relevantInfo.category}\n\nPlease remember that this is general health information. For personalized medical advice, always consult with a healthcare professional.`;
+      return `**${relevantInfo.title}**\n\n${relevantInfo.description}\n\n**Category:** ${relevantInfo.category}${relevantInfo.tags ? `\n**Related Topics:** ${relevantInfo.tags}` : ''}\n\n*Please remember that this is general health information. For personalized medical advice, always consult with a healthcare professional.*`;
     }
 
-    // Fallback responses for common health topics
+    // Enhanced fallback responses for common health topics
+    if (input.includes('disease') || input.includes('illness') || input.includes('condition') || input.includes('symptom')) {
+      return "I understand you're asking about a health condition. While I don't have specific information about this condition in my database, I recommend consulting with a healthcare professional for accurate diagnosis and treatment options. You can also search for more specific terms related to your concern.";
+    }
+
     if (input.includes('exercise') || input.includes('workout') || input.includes('fitness')) {
       return "Regular exercise is crucial for maintaining good health. It can improve cardiovascular health, strengthen muscles and bones, boost mental health, and help maintain a healthy weight. Aim for at least 150 minutes of moderate-intensity exercise per week. However, please consult with a healthcare provider before starting any new exercise program.";
     }
