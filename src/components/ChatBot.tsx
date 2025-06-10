@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,7 +7,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Send } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import MicrophoneButton from './MicrophoneButton';
+import ClientMicrophoneButton from './ClientMicrophoneButton';
 
 interface Message {
   id: string;
@@ -383,7 +382,7 @@ const ChatBot: React.FC = () => {
               placeholder="Ask me about your health concerns or use voice..."
               className="flex-1"
             />
-            <MicrophoneButton 
+            <ClientMicrophoneButton 
               onTranscription={handleTranscription}
               disabled={isTyping}
             />
