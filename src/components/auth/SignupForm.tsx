@@ -12,6 +12,33 @@ interface SignupFormProps {
   onSwitchToLogin: () => void;
 }
 
+const ALLOWED_EMAIL_PROVIDERS = [
+  'gmail.com',
+  'yahoo.com',
+  'yahoo.co.uk',
+  'yahoo.ca',
+  'yahoo.fr',
+  'yahoo.de',
+  'outlook.com',
+  'hotmail.com',
+  'live.com',
+  'icloud.com',
+  'me.com',
+  'mac.com',
+  'protonmail.com',
+  'proton.me',
+  'pm.me',
+  'zoho.com',
+  'zohomail.com',
+  'aol.com',
+  'gmx.com',
+  'gmx.net',
+  'yandex.com',
+  'yandex.ru',
+  'ya.ru',
+  'mail.com'
+];
+
 const SignupForm: React.FC<SignupFormProps> = ({ onSwitchToLogin }) => {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -21,10 +48,52 @@ const SignupForm: React.FC<SignupFormProps> = ({ onSwitchToLogin }) => {
   const [error, setError] = useState('');
   const { signup } = useAuth();
 
+  const validateEmailProvider = (email: string): boolean => {
+    const emailDomain = email.toLowerCase().split('@')[1];
+    return ALLOWED_EMAIL_PROVIDERS.includes(emailDomain);
+  };
+
+  const getProviderName = (email: string): string => {
+    const domain = email.toLowerCase().split('@')[1];
+    const providerMap: { [key: string]: string } = {
+      'gmail.com': 'Gmail',
+      'yahoo.com': 'Yahoo Mail',
+      'yahoo.co.uk': 'Yahoo Mail',
+      'yahoo.ca': 'Yahoo Mail',
+      'yahoo.fr': 'Yahoo Mail',
+      'yahoo.de': 'Yahoo Mail',
+      'outlook.com': 'Outlook.com',
+      'hotmail.com': 'Outlook.com',
+      'live.com': 'Outlook.com',
+      'icloud.com': 'iCloud Mail',
+      'me.com': 'iCloud Mail',
+      'mac.com': 'iCloud Mail',
+      'protonmail.com': 'Proton Mail',
+      'proton.me': 'Proton Mail',
+      'pm.me': 'Proton Mail',
+      'zoho.com': 'Zoho Mail',
+      'zohomail.com': 'Zoho Mail',
+      'aol.com': 'AOL Mail',
+      'gmx.com': 'GMX Mail',
+      'gmx.net': 'GMX Mail',
+      'yandex.com': 'Yandex Mail',
+      'yandex.ru': 'Yandex Mail',
+      'ya.ru': 'Yandex Mail',
+      'mail.com': 'Mail.com'
+    };
+    return providerMap[domain] || domain;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setError('');
+
+    if (!validateEmailProvider(email)) {
+      setError('Please use an email from one of the supported providers: Gmail, Yahoo Mail, Outlook.com, iCloud Mail, Proton Mail, Zoho Mail, AOL Mail, GMX Mail, Yandex Mail, or Mail.com');
+      setIsLoading(false);
+      return;
+    }
 
     if (password !== confirmPassword) {
       setError('Passwords do not match');
@@ -86,11 +155,14 @@ const SignupForm: React.FC<SignupFormProps> = ({ onSwitchToLogin }) => {
             <Input
               id="email"
               type="email"
-              placeholder="john@example.com"
+              placeholder="john@gmail.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
             />
+            <div className="text-xs text-gray-600">
+              Supported providers: Gmail, Yahoo Mail, Outlook.com, iCloud Mail, Proton Mail, Zoho Mail, AOL Mail, GMX Mail, Yandex Mail, Mail.com
+            </div>
           </div>
 
           <div className="space-y-2">
