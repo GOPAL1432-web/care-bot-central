@@ -108,6 +108,7 @@ const SignupForm: React.FC<SignupFormProps> = ({ onSwitchToLogin }) => {
     }
 
     try {
+      console.log('Attempting signup with:', email);
       const success = await signup(name, email, password);
       if (success) {
         toast({
@@ -115,8 +116,17 @@ const SignupForm: React.FC<SignupFormProps> = ({ onSwitchToLogin }) => {
           description: "Welcome to HealthCare AI!",
         });
       }
-    } catch (err) {
-      setError('An error occurred during signup');
+    } catch (err: any) {
+      console.error('Signup error in form:', err);
+      
+      // Check for specific error messages
+      if (err.message && err.message.includes('User already registered')) {
+        setError('An account with this email address already exists. Please use the login form instead or try a different email address.');
+      } else if (err.message && err.message.includes('already registered')) {
+        setError('This email is already registered. Please sign in instead.');
+      } else {
+        setError('An error occurred during signup. Please try again.');
+      }
     } finally {
       setIsLoading(false);
     }
