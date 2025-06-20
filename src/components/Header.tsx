@@ -3,7 +3,7 @@ import React from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { LogOut, User, Settings, History } from 'lucide-react';
+import { LogOut, User, Settings, History, Search } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import {
   DropdownMenu,
@@ -33,10 +33,16 @@ const Header: React.FC<HeaderProps> = ({ onProfileClick }) => {
           
           {user && (
             <div className="flex items-center space-x-4">
+              <Link to="/search-history">
+                <Button variant="ghost" size="sm" className="flex items-center gap-2">
+                  <Search className="w-4 h-4" />
+                  Search History
+                </Button>
+              </Link>
               <Link to="/history">
                 <Button variant="ghost" size="sm" className="flex items-center gap-2">
                   <History className="w-4 h-4" />
-                  History
+                  Chat History
                 </Button>
               </Link>
               <span className="text-sm text-gray-700">Welcome, {user.name}</span>

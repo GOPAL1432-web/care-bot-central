@@ -4,12 +4,28 @@ import { useAuth } from '../contexts/AuthContext';
 import Header from '../components/Header';
 import ProfileModal from '../components/ProfileModal';
 import ChatBot from '../components/ChatBot';
+import SearchBox from '../components/SearchBox';
+import RecentSearches from '../components/RecentSearches';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 
 const Dashboard: React.FC = () => {
   const { user } = useAuth();
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+
+  const handleSearch = (searchTerm: string) => {
+    console.log('Searching for:', searchTerm);
+    // Trigger refresh of recent searches
+    setRefreshTrigger(prev => prev + 1);
+    // Here you could implement actual search functionality
+    // For now, we'll just log the search term
+  };
+
+  const handleRecentSearchClick = (searchTerm: string) => {
+    console.log('Clicked recent search:', searchTerm);
+    // You could implement re-search functionality here
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -25,6 +41,19 @@ const Dashboard: React.FC = () => {
           </p>
         </div>
 
+        {/* Search Section */}
+        <div className="mb-8">
+          <Card>
+            <CardHeader>
+              <CardTitle>Search Health Information</CardTitle>
+              <CardDescription>Search for diseases, symptoms, treatments, and more</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <SearchBox onSearch={handleSearch} />
+            </CardContent>
+          </Card>
+        </div>
+
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Main Chat Area */}
           <div className="lg:col-span-2">
@@ -33,6 +62,13 @@ const Dashboard: React.FC = () => {
 
           {/* Sidebar */}
           <div className="space-y-6">
+            {/* Recent Searches */}
+            <RecentSearches 
+              onSearchClick={handleRecentSearchClick}
+              refreshTrigger={refreshTrigger}
+            />
+
+            {/* Quick Health Tips */}
             <Card>
               <CardHeader>
                 <CardTitle>Quick Health Tips</CardTitle>
@@ -54,6 +90,7 @@ const Dashboard: React.FC = () => {
               </CardContent>
             </Card>
 
+            {/* Emergency Contacts */}
             <Card>
               <CardHeader>
                 <CardTitle>Emergency Contacts</CardTitle>
