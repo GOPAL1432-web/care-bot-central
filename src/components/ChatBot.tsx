@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Send } from 'lucide-react';
+import { Send, Trash2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import ClientMicrophoneButton from './ClientMicrophoneButton';
@@ -246,6 +246,46 @@ const ChatBot: React.FC = () => {
     }
   };
 
+  const clearChat = async () => {
+    try {
+      if (user) {
+        // Clear chat history from database
+        const { error } = await supabase
+          .from('chat_conversations')
+          .delete()
+          .eq('user_id', user.id);
+
+        if (error) throw error;
+      }
+
+      // Reset to initial message
+      const initialMessage = {
+        id: '1',
+        text: 'Hello! I\'m your AI healthcare assistant. How can I help you today?',
+        isBot: true,
+        timestamp: new Date()
+      };
+      
+      setMessages([initialMessage]);
+      
+      if (user) {
+        await saveMessageToDatabase(initialMessage);
+      }
+
+      toast({
+        title: "Chat Cleared",
+        description: "Your chat history has been cleared successfully",
+      });
+    } catch (error) {
+      console.error('Error clearing chat:', error);
+      toast({
+        title: "Error",
+        description: "Failed to clear chat history",
+        variant: "destructive"
+      });
+    }
+  };
+
   const generateHealthResponse = (userInput: string): string => {
     const relevantInfo = searchHealthInformation(userInput);
 
@@ -326,16 +366,27 @@ const ChatBot: React.FC = () => {
   return (
     <Card className="h-[600px] flex flex-col">
       <CardHeader>
-        <CardTitle className="flex items-center space-x-2">
-          <Avatar className="h-8 w-8 bg-blue-600">
-            <AvatarFallback className="text-white">AI</AvatarFallback>
-          </Avatar>
-          <span>Healthcare AI Assistant</span>
-          {!user && (
-            <span className="text-sm text-orange-600 font-normal">
-              (Login to save chat history)
-            </span>
-          )}
+        <CardTitle className="flex items-center justify-between">
+          <div className="flex items-center space-x-2">
+            <Avatar className="h-8 w-8 bg-blue-600">
+              <AvatarFallback className="text-white">AI</AvatarFallback>
+            </Avatar>
+            <span>Healthcare AI Assistant</span>
+            {!user && (
+              <span className="text-sm text-orange-600 font-normal">
+                (Login to save chat history)
+              </span>
+            )}
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={clearChat}
+            className="flex items-center gap-2"
+          >
+            <Trash2 className="h-4 w-4" />
+            Clear Chat
+          </Button>
         </CardTitle>
       </CardHeader>
       <CardContent className="flex-1 flex flex-col p-0">
