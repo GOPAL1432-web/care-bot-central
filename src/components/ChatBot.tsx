@@ -246,44 +246,21 @@ const ChatBot: React.FC = () => {
     }
   };
 
-  const clearChat = async () => {
-    try {
-      if (user) {
-        // Clear chat history from database
-        const { error } = await supabase
-          .from('chat_conversations')
-          .delete()
-          .eq('user_id', user.id);
+  const clearChat = () => {
+    // Reset to initial message without deleting from database
+    const initialMessage = {
+      id: '1',
+      text: 'Hello! I\'m your AI healthcare assistant. How can I help you today?',
+      isBot: true,
+      timestamp: new Date()
+    };
+    
+    setMessages([initialMessage]);
 
-        if (error) throw error;
-      }
-
-      // Reset to initial message
-      const initialMessage = {
-        id: '1',
-        text: 'Hello! I\'m your AI healthcare assistant. How can I help you today?',
-        isBot: true,
-        timestamp: new Date()
-      };
-      
-      setMessages([initialMessage]);
-      
-      if (user) {
-        await saveMessageToDatabase(initialMessage);
-      }
-
-      toast({
-        title: "Chat Cleared",
-        description: "Your chat history has been cleared successfully",
-      });
-    } catch (error) {
-      console.error('Error clearing chat:', error);
-      toast({
-        title: "Error",
-        description: "Failed to clear chat history",
-        variant: "destructive"
-      });
-    }
+    toast({
+      title: "Chat Cleared",
+      description: "Your current chat has been cleared",
+    });
   };
 
   const generateHealthResponse = (userInput: string): string => {
